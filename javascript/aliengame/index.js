@@ -79,11 +79,7 @@ function create() {
 
 	var endArea = this.physics.add.sprite(19900,0,'ground').setOrigin(0,0).setScale(25);
 	endArea.body.moves = false
-	this.physics.add.overlap(player, endArea, winGame, null, this)
-
-	if (player.body.onFloor()) {
-		loseGame();
-	}
+	this.gameOver = false;
 }
 
 function update() {
@@ -153,6 +149,13 @@ function update() {
 		console.log('X Coordinate: ' + String(player.x))
 	}
 
+	if (player.x > 19910 && this.gameOver == false) {
+		winGame();
+		this.gameOver = true;
+	} else if (player.y > 800 && this.gameOver == false) {
+		loseGame();
+		this.gameOver = true;
+	}
 }
 
 //make a new ship 300 pixels to the right of the last ship 
@@ -173,9 +176,11 @@ function collectStar(player, star) {
 }
 
 function winGame() {
-	alert('You Win!');
+	alert('You Win! Press OK to Restart.');
+	location.reload();
 }
 
 function loseGame() {
-	alert('You Lose')
+	alert('You Lose. Press OK to Restart.')
+	location.reload();
 }
