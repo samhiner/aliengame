@@ -1,7 +1,5 @@
 var config = {
 	type: Phaser.AUTO,
-	width: 20000,
-	height: 800,
 	physics: {
 	default: 'arcade',
 		arcade: {
@@ -22,14 +20,17 @@ var score = 0;
 var scoreText;
 
 function preload() {
-	//this.load.image('sky', 'assets/sky.png');
 	this.load.image('ground', 'assets/platform.png');
 	this.load.image('star', 'assets/star.png');
+	this.load.image('alien', 'assets/alien.png')
 	this.load.image('bomb', 'assets/bomb.png');
 	this.load.spritesheet('mainChar', 'assets/dude.png', {frameWidth: 30, frameHeight: 30});
 }
 
 function create() {
+	resize();
+	window.addEventListener("resize", resize, false);
+
 	platforms = this.physics.add.staticGroup();
 
 	player = this.physics.add.sprite(400, 0, 'mainChar');
@@ -59,17 +60,15 @@ function create() {
 
 	cursors = this.input.keyboard.createCursorKeys();
 
-	stars = this.physics.add.group({
-		key: 'star',
-		repeat: 11,
-		setXY: { x: 12, y: 0, stepX: 70 }
-	});
+	stars = this.physics.add.group();
+	aliens = this.physics.add.group(); //TODO: make aliens always be facing you.
 
 	this.physics.add.collider(player, platforms);
 	this.physics.add.collider(stars, platforms);
+	this.physics.add.collider(aliens, platforms)
 	this.physics.add.overlap(player, stars, collectStar, null, this);
 
-	scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#000' });
+	scoreText = this.add.text(16, 16, 'Score: 0', { fontSize: '32px', fill: '#ffffff' });
 
 	this.animTime = 0
 	this.didJump = false
@@ -83,8 +82,13 @@ function create() {
 }
 
 function update() {
+	if (this.gameOver) {
+		return;
+	}
+
 	//center camera around player
 	this.cameras.main.scrollX = player.x - 500
+	scoreText.x = player.x - 475;
 
 	if (cursors.left.isDown) {
 		player.setVelocityX(-700);
@@ -140,34 +144,100 @@ function update() {
 
 	//make new ship if player is nearing end of current ship
 	if (player.x >= this.lastShip - 1000) {
-		console.log(this.lastShip)
-		this.lastShip = makeShip(this.lastShip)
-		console.log(this.lastShip)
+		this.lastShip = makeShip(this.lastShip);
 	}
 
 	if (cursors.down.isDown) {
-		console.log('X Coordinate: ' + String(player.x))
+		console.log('X Coordinate: ' + String(player.x));
 	}
 
-	if (player.x > 19910 && this.gameOver == false) {
+	//TODO: figure out how to put game wins and losses into function
+	if (player.x > 19910) {
+		this.cameras.main.scrollX = 0;
 		winGame();
 		this.gameOver = true;
-	} else if (player.y > 800 && this.gameOver == false) {
+	} else if (player.y > 800) {
+		this.cameras.main.scrollX = 0;
 		loseGame();
 		this.gameOver = true;
+	}
+
+}
+
+function resize() {
+	var canvas = document.querySelector("canvas");
+	var windowWidth = window.innerWidth;
+	var windowHeight = window.innerHeight;
+	var windowRatio = windowWidth / windowHeight;
+	var gameRatio = game.config.width / game.config.height;
+	if (windowRatio < gameRatio) {
+		canvas.style.width = windowWidth + "px";
+		canvas.style.height = (windowWidth / gameRatio) + "px";
+	} else {
+		canvas.style.width = (windowHeight * gameRatio) + "px";
+		canvas.style.height = windowHeight + "px";
 	}
 }
 
 //make a new ship 300 pixels to the right of the last ship 
 //and return the x-value of its right side so it can be used as lastShip next time this is run
 function makeShip(lastShip) {
-	var shipSize = Math.ceil(Math.random() * 5);
 	var distance = Math.ceil(Math.random() * 500) + 500;
+	console.log('Platform generated at ' + String(lastShip + distance) + ' pixels.');
+	var shipSize = Math.ceil(Math.random() * 5);
 	platforms.create(lastShip + distance, Math.ceil(Math.random() * 300) + 350, 'ground').setOrigin(0, 0).setScale(shipSize).refreshBody();
 	var newLastShip = (lastShip + distance) + (shipSize * 400);
+	makeEntities(shipSize, lastShip + distance, newLastShip);
 	return newLastShip;
 }
 
+//put starts and aliens at random point along the ship
+function makeEntities(num,left,right) {
+	let lastStar = left;
+	let entities = [stars, aliens];
+	let entityImages = ['star', 'alien'];
+	for (y = 0; y < entities.length; y++) {
+		for (x = 0; x < num; x++) {
+			let position = Math.ceil(Math.random() * (right - left)) + left;
+			if (position > 19900) {
+				return
+			}
+			entities[y].create(position, 0 , entityImages[y]);
+		}
+	}
+}
+
+function fireGun() {
+	let bullet = bullets.create();
+
+	//get x and y distances between bullet and player
+	let xDist = player.x - bullet.x;
+	let yDist = player.y - bullet.y;
+
+	//find the absolute distance between the player and bullet
+	let totalDist = Math.sqrt(xDist^2 + yDist^2)
+
+	//find out what the distances need to be multiplied by to make absolute distance 10000
+	let distConstant = 10000/totalDist;
+
+	//make the speed of x and y the distance times the constant
+	//this makes the total speed equal to 10000 while also having the bullet move in the correct direction
+	let xSpeed = xDist * distConstant;
+	let ySpeed = yDist * distConstant;
+
+	//make velocity along each dimension equal to 1000
+	bullet.setVelocityX(xSpeed);
+	bullet.setVelocityY(ySpeed);
+
+	//TODO: use object pooling
+	this.time.delayedCall(3000, deleteBullet(bullet), [], this);
+}
+
+function deleteBullet(bullet) {
+	bullet.destroy();
+}
+
+//increase score when stars are collected
 function collectStar(player, star) {
 	star.disableBody(true, true);
 
@@ -181,6 +251,6 @@ function winGame() {
 }
 
 function loseGame() {
-	alert('You Lose. Press OK to Restart.')
+	alert('You Lose. Press OK to Restart.');
 	location.reload();
 }
